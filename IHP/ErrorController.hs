@@ -21,8 +21,6 @@ handlePatternMatchFailure exception controller = do
     let (RequestContext _ respond _ _ _) = ?requestContext
     respond $ responseBuilder status500 [(hContentType, "text/html")] (Blaze.renderHtmlBuilder (renderError "Missing action" errorMessage))
 
-
-
 handleNoResponseReturned :: (Show controller, ?requestContext :: RequestContext) => controller -> IO ResponseReceived
 handleNoResponseReturned controller = do
     let errorMessage = ("No response was returned while running the action " <> tshow controller <> ".\n\nYou can fix this by calling 'render MyView { .. }' at the end of your action.")
@@ -33,7 +31,9 @@ handleNoResponseReturned controller = do
 
 handleGenericException :: (Show controller, ?requestContext :: RequestContext) => Exception.SomeException -> controller -> IO ResponseReceived
 handleGenericException exception controller = do
-    let errorMessage = ("An exception was raised while running the action " <> tshow controller <> ".\n\n")
+    let errorMessage = case exception of
+        _ : "ConversionFailed" : _ -> ("There is a database mismatch between your live database and your types. \n\nYou can fix this by either running 'make db' or by pressing 'Push to DB' in the Schema Designer.") 
+        _ -> ("An exception was raised while running the action " <> tshow controller <> ".\n\n")
     let (RequestContext _ respond _ _ _) = ?requestContext
     let title = H.text (tshow exception)
     putStrLn (tshow exception)
