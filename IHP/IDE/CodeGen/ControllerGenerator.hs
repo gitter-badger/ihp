@@ -55,13 +55,6 @@ data ControllerConfig = ControllerConfig
     , modelName :: Text
     } deriving (Eq, Show)
 
-data ViewConfig = ViewConfig
-    { controllerName :: Text 
-    , applicationName :: Text
-    , modelName :: Text
-    , viewName :: Text
-    } deriving (Eq, Show)
-
 controllerInstance :: ControllerConfig -> Text
 controllerInstance ControllerConfig { controllerName, modelName, applicationName } =
     "instance AutoRoute " <> controllerName <> "Controller\n"

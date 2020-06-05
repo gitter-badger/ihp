@@ -7,15 +7,33 @@ import qualified Data.Text.IO as Text
 import IHP.ViewSupport
 import qualified System.Process as Process
 import IHP.IDE.CodeGen.Types
+import qualified IHP.IDE.SchemaDesigner.Parser as SchemaDesigner
+import IHP.IDE.SchemaDesigner.Types
+import qualified Text.Countable as Countable
 
-buildPlan :: Text -> Text -> Either Text [GeneratorAction]
-buildPlan viewName controllerName =
+data ViewConfig = ViewConfig
+    { controllerName :: Text 
+    , applicationName :: Text
+    , modelName :: Text
+    , viewName :: Text
+    } deriving (Eq, Show)
+
+buildPlan :: Text -> Text -> Text -> IO (Either Text [GeneratorAction])
+buildPlan viewName applicationName controllerName =
     if (null viewName || null controllerName)
-        then Left "View name and controller name cannot be empty"
+        then pure $ Left "View name and controller name cannot be empty"
         else do 
             schema <- SchemaDesigner.parseSchemaSql >>= \case
                 Left parserError -> pure []
                 Right statements -> pure statements
+            let modelName = tableNameToModelName controllerName
+            let viewConfig = ViewConfig {controllerName, applicationName, modelName, viewName }
+            pure $ Right $ generateGenericView schema viewConfig
+
+-- E.g. qualifiedViewModuleName config "Edit" == "Web.View.Users.Edit"
+qualifiedViewModuleName :: ViewConfig -> Text -> Text
+qualifiedViewModuleName config viewName =
+    get #applicationName config <> ".View." <> Countable.pluralize (get #controllerName config) <> "." <> viewName
 
 generateGenericView :: [Statement] -> ViewConfig -> [GeneratorAction]
 generateGenericView schema config = 
@@ -26,6 +44,8 @@ generateGenericView schema config =
             singularVariableName = lcfirst singularName
             pluralVariableName = lcfirst controllerName
             nameWithSuffix = name <> "View" --e.g. "TestView"
+
+            indexAction = Countable.pluralize singularName <> "Action"
 
             viewHeader =
                 ""
@@ -48,6 +68,7 @@ generateGenericView schema config =
                 <> "        <h1>" <> nameWithSuffix <> "</h1>\n"
                 <> "    |]\n"
         in
-            [ EnsureDirectory { directory = get #applicationName config <> "/View/" <> name }
-            , CreateFile { filePath = get #applicationName config <> "/View/" <> name <> "/" <> name <> ".hs", fileContent = genericView }
+            [ EnsureDirectory { directory = get #applicationName config <> "/View/" <> controllerName }
+            , CreateFile { filePath = get #applicationName config <> "/View/" <> controllerName <> "/" <> name <> ".hs", fileContent = genericView }
+            , AddImport { filePath = get #applicationName config <> "/Controller/" <> controllerName <> ".hs", fileContent = qualifiedViewModuleName config name }
             ]
